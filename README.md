@@ -26,7 +26,7 @@ officiel de ServiceNow (`@servicenow/sdk-cli`) avec REA. Voir
 ```bash
 sudo apt update && sudo apt install -y pipx git
 pipx ensurepath
-pipx install "servicenow-cli[browser] @ git+ssh://git@github.com/boisvertmathieu/servicenow-cli.git"
+pipx install "servicenow-cli[browser] @ git+https://github.com/boisvertmathieu/servicenow-cli.git"
 # Navigateur utilisé pour la connexion SSO (installe aussi les bibliothèques système) :
 ~/.local/share/pipx/venvs/servicenow-cli/bin/playwright install --with-deps chromium
 ```
