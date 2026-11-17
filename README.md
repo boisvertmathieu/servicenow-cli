@@ -74,6 +74,9 @@ sn open RITM0012345                                  # ouvre la fiche dans le na
 sn api /api/now/table/sys_user_group -p sysparm_limit=5   # n'importe quel endpoint REST
 ```
 
+Toutes les options, la syntaxe des requêtes encodées (`-q`) et des exemples prêts
+à l'emploi : [docs/reference.md](docs/reference.md).
+
 * `--format json|csv` sur toutes les commandes de lecture (pratique avec `jq`).
 * `sn search` utilise la recherche par mots-clés de ServiceNow (`123TEXTQUERY321`).
   Pour une table non indexée, il bascule automatiquement sur `LIKE`
