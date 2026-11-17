@@ -54,7 +54,8 @@ def _launch(pw, profile: str, headless: bool):
     except Exception as e:  # pragma: no cover - environment specific
         raise BrowserLoginError(
             f"Could not start the browser: {e}\n"
-            "Install it with:  python -m playwright install --with-deps chromium\n"
+            'Install it with:  "$(uv tool dir)/servicenow-cli/bin/playwright" install --with-deps chromium\n'
+            "(from a source checkout: uv run playwright install --with-deps chromium)\n"
             "On WSL, a visible window needs WSLg; otherwise use `sn login --method oauth` or `--method cookie`."
         ) from e
 
@@ -112,8 +113,9 @@ def browser_login(instance: str, profile: str, *, login_path: str | None = None,
         from playwright.sync_api import sync_playwright
     except ImportError as e:
         raise BrowserLoginError(
-            "Browser login needs Playwright:  pipx inject servicenow-cli playwright && "
-            "python -m playwright install --with-deps chromium"
+            "Browser login needs Playwright. Reinstall with the 'browser' extra:\n"
+            '  uv tool install --force "servicenow-cli[browser] @ git+https://github.com/boisvertmathieu/servicenow-cli.git"\n'
+            '  "$(uv tool dir)/servicenow-cli/bin/playwright" install --with-deps chromium'
         ) from e
 
     start_url = f"{instance}/{(login_path or '').lstrip('/')}"

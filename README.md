@@ -23,12 +23,22 @@ officiel de ServiceNow (`@servicenow/sdk-cli`) avec REA. Voir
 
 ## Installation (Ubuntu / WSL)
 
+Avec [uv](https://docs.astral.sh/uv/), qui fournit aussi Python au besoin :
+
 ```bash
-sudo apt update && sudo apt install -y pipx git
-pipx ensurepath
-pipx install "servicenow-cli[browser] @ git+https://github.com/boisvertmathieu/servicenow-cli.git"
+curl -LsSf https://astral.sh/uv/install.sh | sh     # si uv n'est pas déjà installé
+uv tool install "servicenow-cli[browser] @ git+https://github.com/boisvertmathieu/servicenow-cli.git"
+uv tool update-shell                                 # ajoute ~/.local/bin au PATH, puis rouvrez le terminal
 # Navigateur utilisé pour la connexion SSO (installe aussi les bibliothèques système) :
-~/.local/share/pipx/venvs/servicenow-cli/bin/playwright install --with-deps chromium
+"$(uv tool dir)/servicenow-cli/bin/playwright" install --with-deps chromium
+```
+
+Mise à jour : `uv tool upgrade servicenow-cli`. Désinstallation : `uv tool uninstall servicenow-cli`.
+
+Pour essayer sans rien installer de façon permanente :
+
+```bash
+uvx --from "servicenow-cli[browser] @ git+https://github.com/boisvertmathieu/servicenow-cli.git" sn --help
 ```
 
 > La fenêtre de connexion s'affiche via **WSLg** (Windows 11, ou Windows 10 récent
@@ -133,7 +143,7 @@ inspecte le TLS), `SN_OAUTH_CLIENT_SECRET` (clients confidentiels uniquement).
 ## Sécurité
 
 * Les identifiants sont stockés dans le trousseau système s'il y en a un
-  (`pipx inject servicenow-cli keyring`), sinon dans
+  (installez avec l'extra `keyring` : `uv tool install --force "servicenow-cli[browser,keyring] @ git+https://github.com/boisvertmathieu/servicenow-cli.git"`), sinon dans
   `~/.local/state/sncli/credentials/<profil>.json` (permissions `0600`).
 * `sn logout --forget-browser` efface les jetons **et** le profil de navigateur.
 * `sn` n'a que vos droits ServiceNow (mêmes ACL que dans l'interface). Il n'y a
@@ -143,9 +153,10 @@ inspecte le TLS), `SN_OAUTH_CLIENT_SECRET` (clients confidentiels uniquement).
 ## Développement
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]" && python -m playwright install chromium
-pytest
+uv sync                                   # crée .venv, installe le projet + le groupe dev (uv.lock)
+uv run playwright install chromium
+uv run pytest
+uv run sn --help                          # lance le CLI depuis les sources
 ```
 
 Les tests démarrent une **fausse instance ServiceNow et un faux IdP SSO**
