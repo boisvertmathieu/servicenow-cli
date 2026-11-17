@@ -5,3 +5,7 @@ dist/
 build/
 *.egg-info/
 .pytest_cache/
+
+# Skills installés localement par `gh skill install --scope project` (le skill publié est dans skills/)
+.claude/skills/
+.agents/skills/

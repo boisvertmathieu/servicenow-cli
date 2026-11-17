@@ -29,21 +29,43 @@ Lisez le fichier de référence de la table concernée **avant** d'écrire une r
 non triviale : il donne les champs, les valeurs stockées et les relations. Les
 enchaînements d'analyse multi-tables sont dans
 [references/workflows.md](references/workflows.md). La référence complète du CLI
-est dans `docs/reference.md` à la racine du dépôt.
+est dans `docs/reference.md` du dépôt servicenow-cli
+(<https://github.com/boisvertmathieu/servicenow-cli/blob/main/docs/reference.md>).
 
-## 1. Avant de commencer
+## 1. Lancer le CLI et vérifier la session
+
+Le CLI est **embarqué dans ce skill** : `scripts/sn.sh` (code dans
+`scripts/sncli/`). Rien n'est à installer à la main. Au premier lancement, le
+script prépare seul un environnement Python : avec `uv` s'il est présent
+(quelques secondes), sinon un venv `python3` dans `~/.local/state/sncli/skill-venv`.
+
+**Dans ce skill, `sn` désigne `bash <dossier de ce skill>/scripts/sn.sh`.**
+Utilisez le chemin absolu du dossier qui contient ce `SKILL.md` (le script n'est
+pas forcément exécutable : appelez-le toujours via `bash`). Un `sn` déjà installé
+dans le PATH (`uv tool install servicenow-cli`) est équivalent et partage la même
+configuration et la même session.
 
 ```bash
-command -v sn || echo "sn absent"   # dans ce dépôt : `uv run sn ...`
-sn whoami --format json              # vérifie la session (une seule fois par tâche)
+SN="bash /chemin/vers/servicenow-itsm/scripts/sn.sh"   # à refaire dans chaque appel shell
+$SN configure --show       # instance configurée ? ("instance": null sinon)
+$SN whoami --format json   # session valide ? (une seule fois par tâche)
 ```
 
-* `sn whoami` échoue (code 1, « not signed in », « session expired »...) :
-  **arrêtez-vous** et demandez à l'utilisateur de lancer `sn login` lui-même. La
-  connexion passe par un SSO avec MFA dans une fenêtre de navigateur ; un agent ne
-  peut pas la faire. Ne tentez pas `sn login -m cookie` avec des valeurs devinées.
-* Aucune instance configurée (code 2) : demandez le nom de l'instance, puis
-  `sn configure --instance <nom>`.
+* Code 127 avec « il faut uv ou python3 >= 3.10 » : proposez à l'utilisateur
+  d'installer uv (`curl -LsSf https://astral.sh/uv/install.sh | sh`) ou, sous
+  Ubuntu, `sudo apt install python3-venv`.
+* Aucune instance configurée : demandez le nom de l'instance à l'utilisateur, puis
+  `$SN configure --instance <nom>`.
+* `whoami` échoue (code 1, « Not signed in », « session expired »...) :
+  **arrêtez-vous** et demandez à l'utilisateur de lancer lui-même, dans son
+  terminal, `bash <dossier du skill>/scripts/sn.sh login`. La connexion passe par
+  un SSO avec MFA dans une fenêtre de navigateur ; un agent ne peut pas la faire.
+  Ne tentez pas `login -m cookie` avec des valeurs devinées.
+* Première connexion : `login` télécharge Chromium (~150 Mo) s'il manque. Sur une
+  Ubuntu/WSL neuve, l'utilisateur devra peut-être d'abord lancer
+  `bash <dossier du skill>/scripts/sn.sh setup --with-deps` (bibliothèques système,
+  sudo). Sans navigateur possible : `login -m oauth` ou `login -m cookie` (voir la
+  référence du CLI).
 
 ## 2. Règles d'efficacité
 

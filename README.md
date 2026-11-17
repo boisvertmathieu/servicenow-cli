@@ -87,25 +87,51 @@ Toutes les options, la syntaxe des requêtes encodées (`-q`) et des exemples pr
 
 ## Utilisation par un agent IA
 
-Le dépôt fournit un skill, [`.claude/skills/servicenow-itsm/`](.claude/skills/servicenow-itsm/SKILL.md),
-qui apprend à un agent (Claude Code ou tout agent compatible avec le format
-`SKILL.md`) à utiliser `sn` efficacement sur les incidents (`INC`), changements
-(`CHG`), problèmes (`PRB`) et articles de connaissance (`KB`) : sortie JSON et
-champs ciblés, valeurs stockées des états, relations entre tables (incident ↔
-problème ↔ changement ↔ KB), comptages avec l'API Aggregate, et enchaînements
-d'analyse (aide à la résolution, revue de file, préparation de CAB, analyse de
-problème). Le skill est en lecture seule par défaut : toute écriture via
-`sn api -X ...` exige la confirmation de l'utilisateur.
+Le dépôt fournit un skill, [`skills/servicenow-itsm/`](skills/servicenow-itsm/SKILL.md),
+qui apprend à un agent (Claude Code, GitHub Copilot, Codex, Cursor... tout agent
+compatible avec le format [Agent Skills](https://agentskills.io)) à utiliser `sn`
+efficacement sur les incidents (`INC`), changements (`CHG`), problèmes (`PRB`) et
+articles de connaissance (`KB`) : sortie JSON et champs ciblés, valeurs stockées
+des états, relations entre tables (incident ↔ problème ↔ changement ↔ KB),
+comptages avec l'API Aggregate, et enchaînements d'analyse (aide à la résolution,
+revue de file, préparation de CAB, analyse de problème). Le skill est en lecture
+seule par défaut : toute écriture via `sn api -X ...` exige la confirmation de
+l'utilisateur.
 
-Claude Code le charge automatiquement quand il est lancé dans ce dépôt. Pour
-l'utiliser ailleurs, copiez le dossier dans `~/.claude/skills/` :
+Installation avec [GitHub CLI](https://cli.github.com/) (`gh` 2.90 ou plus récent) :
 
 ```bash
-mkdir -p ~/.claude/skills && cp -r .claude/skills/servicenow-itsm ~/.claude/skills/
+gh skill install boisvertmathieu/servicenow-cli servicenow-itsm --agent claude-code --scope user
 ```
 
-L'agent ne peut pas se connecter à votre place (SSO + MFA) : lancez `sn login`
-vous-même avant de lui confier une tâche.
+Sans `--agent` ni `--scope`, `gh` pose la question ; en mode non interactif, il
+installe pour GitHub Copilot dans le projet courant (`.agents/skills/`). Lancé
+sans nom de skill, `gh skill install boisvertmathieu/servicenow-cli` liste les
+skills du dépôt. Mise à jour : `gh skill update`. Sans `gh`, copiez le dossier
+`skills/servicenow-itsm` dans le dossier de skills de votre agent (par exemple
+`~/.claude/skills/`).
+
+**Le CLI est embarqué dans le skill** (`scripts/sncli/`, lancé par
+`scripts/sn.sh`) : il n'y a rien d'autre à installer. Au premier lancement, le
+script prépare l'environnement Python, avec `uv` s'il est présent, sinon avec un
+venv `python3` (3.10+) dans `~/.local/state/sncli/skill-venv`. Un `sn` installé
+séparément partage la même configuration et la même session.
+
+L'agent ne peut pas se connecter à votre place (SSO + MFA). Une fois, dans votre
+terminal (le chemin dépend de l'agent et de la portée choisis) :
+
+```bash
+bash ~/.claude/skills/servicenow-itsm/scripts/sn.sh configure --instance moncompagnie
+bash ~/.claude/skills/servicenow-itsm/scripts/sn.sh login     # télécharge Chromium au premier login
+```
+
+Sur une Ubuntu/WSL neuve, installez d'abord les bibliothèques système du
+navigateur : `bash ~/.claude/skills/servicenow-itsm/scripts/sn.sh setup --with-deps`.
+
+> Développement : `skills/servicenow-itsm/scripts/sncli/` est une copie de
+> `src/sncli/`. Après toute modification du CLI, lancez
+> `uv run python tools/sync_skill_cli.py` (`tests/test_skill.py` échoue tant que
+> la copie n'est pas à jour).
 
 ## Méthodes de connexion
 
