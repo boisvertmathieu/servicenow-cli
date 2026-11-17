@@ -85,6 +85,28 @@ Toutes les options, la syntaxe des requêtes encodées (`-q`) et des exemples pr
 * Les requêtes encodées se copient depuis une liste ServiceNow : clic droit sur le
   fil d'Ariane du filtre, puis *Copy query*.
 
+## Utilisation par un agent IA
+
+Le dépôt fournit un skill, [`.claude/skills/servicenow-itsm/`](.claude/skills/servicenow-itsm/SKILL.md),
+qui apprend à un agent (Claude Code ou tout agent compatible avec le format
+`SKILL.md`) à utiliser `sn` efficacement sur les incidents (`INC`), changements
+(`CHG`), problèmes (`PRB`) et articles de connaissance (`KB`) : sortie JSON et
+champs ciblés, valeurs stockées des états, relations entre tables (incident ↔
+problème ↔ changement ↔ KB), comptages avec l'API Aggregate, et enchaînements
+d'analyse (aide à la résolution, revue de file, préparation de CAB, analyse de
+problème). Le skill est en lecture seule par défaut : toute écriture via
+`sn api -X ...` exige la confirmation de l'utilisateur.
+
+Claude Code le charge automatiquement quand il est lancé dans ce dépôt. Pour
+l'utiliser ailleurs, copiez le dossier dans `~/.claude/skills/` :
+
+```bash
+mkdir -p ~/.claude/skills && cp -r .claude/skills/servicenow-itsm ~/.claude/skills/
+```
+
+L'agent ne peut pas se connecter à votre place (SSO + MFA) : lancez `sn login`
+vous-même avant de lui confier une tâche.
+
 ## Méthodes de connexion
 
 | Méthode | Commande | Admin requis | Quand l'utiliser |
