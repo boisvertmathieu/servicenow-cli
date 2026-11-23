@@ -3,20 +3,22 @@ name: servicenow-itsm
 description: >-
   Interroger ServiceNow en lecture avec le CLI `sn` (servicenow-cli) pour les
   incidents (INC, table incident), les changements (CHG, change_request), les
-  problèmes (PRB, problem) et les articles de la base de connaissances (KB,
-  kb_knowledge). À utiliser dès qu'une demande mentionne un numéro INC/CHG/PRB/KB,
-  ServiceNow, un ticket, une panne, une file d'incidents, un changement planifié,
-  un CAB, une cause racine, une erreur connue (known error), un contournement ou un
-  article KB : retrouver une fiche, lire son historique (work notes), chercher des
-  incidents similaires, relier incidents, problèmes et changements, compter ou
-  regrouper des tickets, ou trouver la procédure documentée. Use for ServiceNow
-  incident / change / problem / knowledge lookups via the `sn` command.
+  problèmes (PRB, problem), les articles de la base de connaissances (KB,
+  kb_knowledge) et la CMDB (offres de service, CI). À utiliser dès qu'une demande
+  mentionne un numéro INC/CHG/PRB/KB, ServiceNow, un ticket, une panne, un
+  changement planifié, un CAB, une cause racine, une erreur connue, un article KB,
+  une offre de service ou un élément de configuration (CI) : retrouver une fiche,
+  lire son historique, chercher des incidents similaires, relier incidents,
+  problèmes et changements, compter des tickets, trouver la procédure documentée,
+  ou déterminer si une offre de service est liée à un CI précis (et par quel
+  chemin de relations). Use for ServiceNow incident / change / problem /
+  knowledge / service offering-CI lookups via the `sn` command.
 ---
 
-# ServiceNow ITSM avec `sn` (INC, CHG, PRB, KB)
+# ServiceNow ITSM avec `sn` (INC, CHG, PRB, KB, offres de service et CI)
 
 `sn` interroge l'instance ServiceNow de l'utilisateur **avec ses droits** (mêmes
-ACL que l'interface). Ce skill couvre quatre tables :
+ACL que l'interface). Ce skill couvre ces tables :
 
 | Préfixe | Table | Rôle | Détails |
 |---|---|---|---|
@@ -24,6 +26,7 @@ ACL que l'interface). Ce skill couvre quatre tables :
 | `CHG` | `change_request` (+ `change_task`) | Modification planifiée | [references/change.md](references/change.md) |
 | `PRB` | `problem` (+ `problem_task`) | Cause sous-jacente d'incidents | [references/problem.md](references/problem.md) |
 | `KB` | `kb_knowledge` | Article de connaissance | [references/knowledge.md](references/knowledge.md) |
+| — | `service_offering`, `cmdb_ci`, `cmdb_rel_ci`, `svc_ci_assoc` | Offre de service, CI et leurs liens | [references/service-offering-ci.md](references/service-offering-ci.md) |
 
 Lisez le fichier de référence de la table concernée **avant** d'écrire une requête
 non triviale : il donne les champs, les valeurs stockées et les relations. Les
@@ -105,6 +108,7 @@ $SN whoami --format json   # session valide ? (une seule fois par tâche)
 | Article KB pour un symptôme | `sn kb "<symptôme>" -n 5 --format json` |
 | Compter / regrouper | `sn api /api/now/stats/<table> -p sysparm_count=true -p sysparm_group_by=<champ> -p "sysparm_query=..."` |
 | Historique (work notes, commentaires) | `sn get <NUM> -f work_notes,comments --format json` |
+| L'offre de service X est-elle liée au CI Y ? | `sn ci-link "<offre>" "<CI>" --format json` (voir [service-offering-ci.md](references/service-offering-ci.md)) |
 | Lien à donner à l'utilisateur | champ `_url` du JSON (n'utilisez pas `sn open`, qui lance un navigateur) |
 
 Notes :
@@ -116,6 +120,11 @@ Notes :
 * `sn query`, `sn kb` renvoient une liste de lignes ; `sn get` un objet.
 * Ne mettez **jamais** `^NQ` dans le `-q` de `sn search` (il crée un bloc sans la
   condition de recherche). Pour une logique OU complexe, utilisez `sn query`.
+* `sn ci-link` trouve le plus court chemin entre une offre et un CI (relations
+  `cmdb_rel_ci` et cartes de service `svc_ci_assoc`) en quelques requêtes groupées.
+  Ne reconstituez pas ce parcours niveau par niveau avec `sn query`. Avant de
+  conclure « non lié », lisez `search` dans le JSON (`exhausted`, `truncated`,
+  avertissements) comme l'explique la référence.
 * `sn get` avec un seul argument déduit la table du préfixe (`INC`, `CHG`, `CTASK`,
   `PRB`, `PTASK`, `KB`...). Si l'instance utilise d'autres préfixes, passez la
   table : `sn get change_request CHG0030001`.
@@ -150,7 +159,7 @@ resolved_atBETWEENjavascript:gs.beginningOfLastMonth()@javascript:gs.endOfLastMo
 
 ## 6. Sécurité : lecture seule par défaut
 
-* `sn get`, `search`, `query`, `kb`, `whoami`, `status` et `sn api` en `GET` sont
+* `sn get`, `search`, `query`, `kb`, `ci-link`, `whoami`, `status` et `sn api` en `GET` sont
   en lecture seule. Utilisez-les librement.
 * `sn api -X POST|PATCH|PUT|DELETE` **modifie réellement** l'instance (ajout de
   work note, changement d'état, assignation...). Ne le faites que si l'utilisateur

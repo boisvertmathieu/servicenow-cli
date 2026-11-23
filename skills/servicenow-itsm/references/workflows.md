@@ -127,3 +127,29 @@ sn api /api/now/stats/kb_knowledge -p sysparm_count=true -p 'sysparm_query=workf
 Pour les tendances, comparez deux périodes avec deux requêtes
 (`opened_at>=javascript:gs.daysAgoStart(30)` et
 `opened_atBETWEENjavascript:gs.daysAgoStart(60)@javascript:gs.daysAgoEnd(31)`).
+
+## 9. « L'offre de service X est-elle liée au CI Y ? »
+
+1. Une seule commande (détails et lecture du JSON :
+   [service-offering-ci.md](service-offering-ci.md)) :
+   ```bash
+   sn ci-link "<offre>" "<CI>" --format json
+   ```
+2. Code `1` avec « Several ... match » : le nom est ambigu. Relancez avec le
+   `sys_id` du bon candidat (le message les liste avec leur classe) ou avec
+   `--ci-table <classe>` / `--offering-table cmdb_ci_service`. S'il est impossible
+   de trancher, demandez à l'utilisateur.
+3. `linked: true` : répondez oui et citez `chain` avec le type de chaque relation
+   (`steps[].type`) et sa source (relation CMDB ou carte de service). Donnez les
+   `_url` de l'offre et du CI.
+4. `linked: false` : selon `search` (voir la référence), relancez **une fois**
+   avec `--depth 10`, `--exclude-type "Connects to"` (si `truncated`) ou
+   `--direction any`. Un lien trouvé seulement en `any` est une hypothèse.
+5. En complément, si utile : nombre d'incidents qui portent à la fois l'offre et
+   le CI (indice d'usage, pas un lien CMDB) :
+   ```bash
+   sn api /api/now/stats/incident -p sysparm_count=true \
+     -p 'sysparm_query=service_offering.name=<offre>^cmdb_ci.name=<CI>'
+   ```
+6. Pour vérifier plusieurs CI contre la même offre, lancez les `sn ci-link` en
+   parallèle (une commande par CI).

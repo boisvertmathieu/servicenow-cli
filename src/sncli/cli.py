@@ -325,6 +325,47 @@ def kb(c: Ctx, text, limit, show_url, fmt):
     emit_rows(r["rows"], fmt, title=f"{r['table']} ({len(r['rows'])})", show_url=show_url)
 
 
+@main.command("ci-link")
+@click.argument("offering")
+@click.argument("ci")
+@click.option("--offering-table", default="service_offering", show_default=True,
+              help="Table of the offering (e.g. cmdb_ci_service for a business service).")
+@click.option("--ci-table", default="cmdb_ci", show_default=True,
+              help="Table of the CI; a class (cmdb_ci_server, cmdb_ci_appl...) narrows an ambiguous name.")
+@click.option("--depth", "-d", "max_depth", default=6, show_default=True, type=click.IntRange(1, 12),
+              help="Maximum number of relationships between the offering and the CI.")
+@click.option("--direction", type=click.Choice(["down", "any"]), default="down", show_default=True,
+              help="down: the CI must be downstream of the offering (parent -> child, CSDM). "
+                   "any: follow relationships both ways (broader, can find spurious paths).")
+@click.option("--no-service-map", is_flag=True, help="Ignore service maps (svc_ci_assoc).")
+@click.option("--exclude-type", multiple=True,
+              help="Skip relationship types containing this text, e.g. 'Connects to' (repeatable).")
+@click.option("--max-nodes", default=5000, show_default=True, help="Stop after reaching this many CIs per side.")
+@click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table")
+@pass_ctx
+@_fail_on_api_errors
+def ci_link(c: Ctx, offering, ci, offering_table, ci_table, max_depth, direction, no_service_map, exclude_type,
+            max_nodes, fmt):
+    """Is a service offering linked to a CI?  Shortest CMDB path between them.
+
+    \b
+    OFFERING and CI: exact name, part of the name (must be unique) or sys_id.
+      sn ci-link "Messagerie - Standard" SRV-MAIL-01
+      sn ci-link "Paie" "PAIE-DB" --ci-table cmdb_ci_db_instance --format json
+    """
+    from .cmdb import describe, find_link, resolve
+    with c.client() as cl:
+        off = resolve(cl, offering_table, offering, "offering", extra_fields=["parent"])
+        target = resolve(cl, ci_table, ci, "CI")
+        res = find_link(cl, off, target, max_depth=max_depth, direction=direction,
+                        use_service_map=not no_service_map, exclude_types=_split(exclude_type), max_nodes=max_nodes)
+    if fmt == "json":
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return
+    for line in describe(res):
+        print(line)
+
+
 @main.command("open")
 @click.argument("args", nargs=-1, required=True)
 @pass_ctx

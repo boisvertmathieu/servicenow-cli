@@ -12,6 +12,8 @@ Implements just enough real behaviour:
 * Table API with 123TEXTQUERY321 keyword search, LIKE, number=, javascript:gs.getUserID()
 * /oauth_auth.do + /oauth_token.do with PKCE S256, loopback and out-of-band redirects
 * Knowledge API /api/sn_km_api/knowledge/articles
+* a small CMDB (service offerings, cmdb_rel_ci, svc_ci_assoc) with IN, dot-walked
+  fields (parent.sys_class_name) and sysparm_display_value=true|false|all
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -51,6 +54,93 @@ DATA = {
         {"sys_id": "e" * 32, "number": "U0001", "short_description": "custom vpn record", "description": ""},
     ],
 }
+
+
+# ---------------------------------------------------------------- CMDB
+# Reference / choice fields are stored as {"value", "display_value"}; plain strings are both.
+def _ci(sid, name, cls, label, **extra):
+    return {"sys_id": sid, "name": name, "sys_class_name": {"value": cls, "display_value": label},
+            "operational_status": {"value": "1", "display_value": "Operational"}, **extra}
+
+
+def _id(n: int) -> str:
+    return f"{n:032x}"
+
+
+CI = {k: _id(i) for i, k in enumerate(
+    ["email", "email_std", "email_prem", "payroll", "exch_svc", "exch_app", "mail01", "mail02", "maildb", "pay01",
+     "mail01_dup"], start=0x100)}
+_CIS = [
+    _ci(CI["email"], "Email", "cmdb_ci_service_business", "Business Service"),
+    _ci(CI["email_std"], "Email - Standard", "service_offering", "Service Offering",
+        parent={"value": CI["email"], "display_value": "Email"}),
+    _ci(CI["email_prem"], "Email - Premium", "service_offering", "Service Offering",
+        parent={"value": CI["email"], "display_value": "Email"}),
+    _ci(CI["payroll"], "Payroll", "service_offering", "Service Offering", parent={"value": "", "display_value": ""}),
+    _ci(CI["exch_svc"], "Exchange Prod", "cmdb_ci_service_auto", "Application Service"),
+    _ci(CI["exch_app"], "Exchange 2019", "cmdb_ci_appl", "Application"),
+    _ci(CI["mail01"], "SRV-MAIL-01", "cmdb_ci_win_server", "Windows Server"),
+    _ci(CI["mail02"], "SRV-MAIL-02", "cmdb_ci_win_server", "Windows Server"),
+    _ci(CI["maildb"], "MAILDB", "cmdb_ci_db_instance", "Database Instance"),
+    _ci(CI["pay01"], "SRV-PAY-01", "cmdb_ci_linux_server", "Linux Server"),
+    _ci(CI["mail01_dup"], "SRV-MAIL-01", "cmdb_ci_appl", "Application"),   # same name, other class
+]
+_NAMES = {c["sys_id"]: c["name"] for c in _CIS}
+
+
+def _ref(key):
+    return {"value": CI[key], "display_value": _NAMES[CI[key]]}
+
+
+def _rel(n, parent, child, typ):
+    return {"sys_id": _id(0x200 + n), "parent": _ref(parent), "child": _ref(child),
+            "type": {"value": _id(0x300 + len(typ)), "display_value": typ}}
+
+
+def _assoc(n, svc, ci):
+    return {"sys_id": _id(0x400 + n), "service_id": _ref(svc), "ci_id": _ref(ci)}
+
+
+CMDB = {
+    "cmdb_ci": _CIS,
+    "service_offering": [c for c in _CIS if c["sys_class_name"]["value"] == "service_offering"],
+    "cmdb_ci_win_server": [c for c in _CIS if c["sys_class_name"]["value"] == "cmdb_ci_win_server"],
+    "cmdb_ci_service": [c for c in _CIS if c["sys_class_name"]["value"] in (
+        "service_offering", "cmdb_ci_service_business", "cmdb_ci_service_auto")],
+    "cmdb_rel_ci": [
+        _rel(1, "email_std", "exch_svc", "Depends on::Used by"),
+        _rel(2, "exch_svc", "exch_app", "Depends on::Used by"),
+        _rel(3, "exch_app", "mail01", "Runs on::Runs"),
+        _rel(4, "payroll", "pay01", "Depends on::Used by"),
+        _rel(5, "mail01", "pay01", "Connects to::Connected by"),
+    ],
+    "svc_ci_assoc": [_assoc(1, "exch_svc", "maildb"), _assoc(2, "exch_svc", "mail02")],
+}
+DATA.update(CMDB)
+_BY_ID = {r["sys_id"]: r for rows in CMDB.values() for r in rows}
+
+
+def _raw(v):
+    return v.get("value") if isinstance(v, dict) else v
+
+
+def _get(row: dict, field: str):
+    """Field value with dot-walking (parent.sys_class_name) through the CMDB index."""
+    if "." in field:
+        ref, attr = field.split(".", 1)
+        target = _BY_ID.get(str(_raw(row.get(ref)) or ""))
+        return _get(target, attr) if target else ""
+    return row.get(field, "")
+
+
+def _render(v, mode: str):
+    if mode == "all":
+        return v if isinstance(v, dict) else {"value": v, "display_value": v}
+    if isinstance(v, dict):
+        return v["value"] if mode == "false" else v["display_value"]
+    return v
+
+
 TEXT_INDEXED = {"incident", "kb_knowledge", "sc_req_item", "change_request", "problem", "task"}
 
 
@@ -100,12 +190,15 @@ def _match(row: dict, query: str, table: str) -> bool | str:
                 ok = ok or all(w in blob for w in words)
             elif "LIKE" in t:
                 f, v = t.split("LIKE", 1)
-                ok = ok or v.lower() in str(row.get(f, "")).lower()
+                ok = ok or v.lower() in str(_render(_get(row, f), "true")).lower()
+            elif "=" not in t and re.match(r"^[a-z0-9_.]+IN", t):
+                f, v = t.split("IN", 1)
+                ok = ok or str(_raw(_get(row, f))) in v.split(",")
             elif "=" in t:
                 f, v = t.split("=", 1)
                 if v == "javascript:gs.getUserID()":
                     v = USER["sys_id"]
-                ok = ok or str(row.get(f, "")) == v
+                ok = ok or str(_raw(_get(row, f))) == v
         if not ok:
             return False
     return True
@@ -292,7 +385,8 @@ def make_handler(st: State):
                     r = next((r for r in rows if r["sys_id"] == parts[5]), None)
                     if not r:
                         return self._json(404, {"error": {"message": "No Record found"}, "status": "failure"})
-                    return self._json(200, {"result": r}, cookies=set_c)
+                    mode = q.get("sysparm_display_value", "false")
+                    return self._json(200, {"result": {k: _render(v, mode) for k, v in r.items()}}, cookies=set_c)
                 out = []
                 for r in rows:
                     m = _match(r, q.get("sysparm_query", ""), table)
@@ -302,9 +396,9 @@ def make_handler(st: State):
                         out.append(r)
                 off, lim = int(q.get("sysparm_offset", 0)), int(q.get("sysparm_limit", 10000))
                 out = out[off:off + lim]
-                if q.get("sysparm_fields"):
-                    fl = q["sysparm_fields"].split(",")
-                    out = [{k: r.get(k, "") for k in fl} for r in out]
+                fl = q["sysparm_fields"].split(",") if q.get("sysparm_fields") else None
+                mode = q.get("sysparm_display_value", "false")
+                out = [{k: _render(_get(r, k), mode) for k in (fl or r)} for r in out]
                 return self._json(200, {"result": out}, cookies=set_c)
             self._json(404, {"error": {"message": "not found"}})
 

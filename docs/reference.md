@@ -15,6 +15,7 @@ Pour l'installation et la connexion, voir le [README](../README.md).
   * [`sn query`](#sn-query) : requête encodée sur une table
   * [`sn get`](#sn-get) : afficher une fiche
   * [`sn kb`](#sn-kb) : rechercher dans la base de connaissances
+  * [`sn ci-link`](#sn-ci-link) : une offre de service est-elle liée à un CI ?
   * [`sn open`](#sn-open) : ouvrir une fiche dans le navigateur
   * [`sn api`](#sn-api) : appeler n'importe quel endpoint REST
 * [Requêtes encodées (`-q`)](#requêtes-encodées--q)
@@ -213,6 +214,56 @@ connaissances, catégorie...), utilisez :
 
 ```bash
 sn search "vpn" -t kb_knowledge -q "workflow_state=published^kb_knowledge_base.title=IT"
+```
+
+### `sn ci-link`
+
+```text
+sn ci-link [OPTIONS] OFFRE CI
+```
+
+Indique si une offre de service est liée à un élément de configuration (CI) et
+donne **le plus court chemin** de relations entre les deux.
+
+`OFFRE` et `CI` : nom exact, partie unique du nom, ou `sys_id`. L'offre est
+cherchée dans `service_offering`, le CI dans `cmdb_ci` (toutes classes). Si
+plusieurs fiches correspondent, la commande échoue (code `1`) et liste les
+candidats avec leur classe et leur `sys_id`.
+
+Liens reconnus, dans cet ordre :
+
+| `link` | Signification |
+|---|---|
+| `same-record` | L'offre et le CI sont la même fiche. |
+| `offering-parent` | Le CI est le service parent de l'offre (`service_offering.parent`). |
+| `direct` | Une relation `cmdb_rel_ci` relie l'offre et le CI. |
+| `indirect` | Chaîne de plusieurs relations `cmdb_rel_ci`, éventuellement par une carte de service (`svc_ci_assoc` : un service applicatif contient le CI). |
+
+La recherche est bidirectionnelle (vers le bas depuis l'offre, vers le haut depuis
+le CI), par niveaux, avec une requête groupée (`parentIN...`) par niveau et par
+lot de 100 CI.
+
+| Option | Défaut | Description |
+|---|---|---|
+| `--offering-table TABLE` | `service_offering` | Table de l'offre (`cmdb_ci_service` pour un service). |
+| `--ci-table TABLE` | `cmdb_ci` | Table du CI ; une classe (`cmdb_ci_server`...) lève une ambiguïté de nom. |
+| `-d`, `--depth N` | `6` | Nombre maximal de relations entre l'offre et le CI (1 à 12). |
+| `--direction down\|any` | `down` | `down` : le CI doit être en aval de l'offre (parent → enfant). `any` : relations suivies dans les deux sens. |
+| `--no-service-map` | désactivé | N'utilise pas les cartes de service (`svc_ci_assoc`). |
+| `--exclude-type TEXTE` | aucun | Ignore les types de relation dont le libellé contient ce texte. Répétable. |
+| `--max-nodes N` | `5000` | Arrêt de sécurité : nombre de CI atteints par côté. |
+| `--format table\|json` | `table` | `json` : objet avec `linked`, `link`, `depth`, `chain`, `steps`, `offering`, `ci`, `search`. |
+
+Le champ `search` du JSON décrit le parcours : `exhausted` (tout le graphe
+accessible a été vu), `truncated` (limite atteinte), `queries`,
+`reached_from_offering`, `reached_from_ci`, `service_map` (`false` si
+`svc_ci_assoc` n'est pas lisible) et `warnings`. Le code de sortie est `0` que le
+lien existe ou non.
+
+```bash
+sn ci-link "Messagerie - Standard" SRV-MAIL-01
+sn ci-link "Paie" PAIE-DB --ci-table cmdb_ci_db_instance --format json
+sn ci-link 1a2b...  3c4d... --direction any --exclude-type "Connects to"
 ```
 
 ### `sn open`

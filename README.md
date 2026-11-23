@@ -70,6 +70,7 @@ sn kb "configurer le VPN"                            # articles de connaissance
 sn get INC0012345                                    # table déduite du préfixe
 sn get change_request 3f2c...                        # par sys_id
 sn query incident -q "assignment_group.name=Service Desk^active=true" -o -sys_updated_on
+sn ci-link "Messagerie - Standard" SRV-MAIL-01       # l'offre de service est-elle liée à ce CI ?
 sn open RITM0012345                                  # ouvre la fiche dans le navigateur Windows
 sn api /api/now/table/sys_user_group -p sysparm_limit=5   # n'importe quel endpoint REST
 ```
